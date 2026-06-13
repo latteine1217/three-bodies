@@ -3,16 +3,25 @@
 'use strict';
 
 const T_LO = 0.7, T_HI = 1.5;     // 宜居帶（恆紀元條件）
-const STD_MAX = 0.12;             // 恆紀元要求的溫度低變異
-const T_MIN = 0.35, T_MAX = 2.6;  // 生存上下限，超出即文明毀滅
+const STD_MAX = 0.14;             // 恆紀元要求的溫度低變異
+const T_MIN = 0.55, T_MAX = 1.9;  // 生存上下限（緩衝後表面溫），超出即文明毀滅
+const T_SCORCH = 2.0;             // 瞬時灼燒：恆星近掠的瞬時高照射壓過熱緩衝，直接燒毀
 const D_GIANT = 0.55;             // 最近恆星近於此且其餘遠 → 巨日
 const WINDOW = 90;                // 溫度滑動視窗樣本數（平滑 T）
-const THERMAL_TAU = 9;            // 行星熱慣性時間常數：大氣＋水體蓄熱，平滑瞬時輻射變化
+const THERMAL_TAU = 4;            // 行星熱慣性時間常數：大氣＋水體蓄熱，平滑短暫閃焰但讓持續變化爬升
 const SWITCH_DWELL = 45;          // 紀元切換確認幀數：候選狀態須持續此久才真正切換（遲滯緩衝）
 const RATE = 1;                   // 文明科技基礎成長率
 const GROWTH_ACCEL = 0.05;        // 指數加速係數：越先進成長越快（dP/dt = RATE·(1+ACCEL·P)）
 const LIFE_TAU = 15;              // 生命孵化期：毀滅後需在恆紀元穩定累積此時長，生命才重新演化萌芽
 const DARK_FOREST_RATE = 0.012;   // 抵星際後每單位時間遭黑暗森林打擊的機率（暴露即死）
+const YEARS_PER_SIMTIME = 300;    // 模擬時間 → 文明紀年換算（史詩尺度）
+
+// 文明紀年格式化：年 / 萬年 / 億年
+export function formatYears(y) {
+  if (y >= 1e8) return (y / 1e8).toFixed(2) + ' 億年';
+  if (y >= 1e4) return (y / 1e4).toFixed(1) + ' 萬年';
+  return Math.round(y) + ' 年';
+}
 const THRESHOLDS = [0, 20, 50, 100, 180, 300]; // 各等級所需累積進度
 const MAX_LEVEL = THRESHOLDS.length - 1;
 const LEVEL_NAMES = ['蠻荒', '農業文明', '工業文明', '原子文明', '資訊文明', '星際文明'];
@@ -29,6 +38,7 @@ export class Civilization {
     this.simTime = 0;
     this.temperature = 1;
     this.surfaceTemp = 1;      // 行星表面溫度（含大氣/水體熱慣性，落後於瞬時輻射）
+    this.civAge = 0;           // 當前文明已發展年數（紀年）
     this.era = 'chaotic';
     this.window = [];
     this.log = [];
@@ -57,23 +67,22 @@ export class Civilization {
   }
 
   #recordToBoard(cause) {
+    const years = (this.simTime - this.civBirth) * YEARS_PER_SIMTIME;
     if (this.civMaxLevel > 0) {
-      this.leaderboard.push({
-        id: this.civId, level: this.civMaxLevel,
-        duration: this.simTime - this.civBirth,
-      });
-      this.leaderboard.sort((a, b) => b.level - a.level || b.duration - a.duration);
+      this.leaderboard.push({ id: this.civId, level: this.civMaxLevel, years });
+      this.leaderboard.sort((a, b) => b.level - a.level || b.years - a.years);
       this.leaderboard = this.leaderboard.slice(0, 5);
     }
-    // 《三体》遊戲經典毀滅宣告格式
+    // 《三体》遊戲經典毀滅宣告格式 + 文明延續年數
     this.#pushLog('doom',
-      `第 ${this.civId} 號文明毀滅於${cause}，該文明進化到了「${LEVEL_NAMES[this.civMaxLevel]}」層次。`
-      + `文明的種子仍在，它將重新啟動……`);
+      `第 ${this.civId} 號文明毀滅於${cause}，該文明進化到了「${LEVEL_NAMES[this.civMaxLevel]}」層次、`
+      + `延續 ${formatYears(years)}。文明的種子仍在，它將重新啟動……`);
     this.#newCiv(this.civId + 1);
   }
 
   update(dt, env) {
     this.simTime += dt;
+    this.civAge = (this.simTime - this.civBirth) * YEARS_PER_SIMTIME;   // 當前文明紀年
 
     // 熱慣性：行星表面溫度（大氣＋水體蓄熱）以時間常數 THERMAL_TAU 緩慢趨近瞬時輻射平衡溫度，
     // 平滑短暫的烈日/寒潮，使宜居星球更耐瞬時波動。
@@ -93,8 +102,9 @@ export class Civilization {
 
     // 災難判定 → 文明毀滅（僅在進入危機的邊緣觸發一次，避免每幀重複摧毀）
     // 引力撕裂：行星進入最近恆星的洛希極限內
-    const tidal = env.nearestDist < env.rocheLimit;
-    const doomed = tidal || T > T_MAX || T < T_MIN;
+    const tidal = env.nearestDist < env.rocheLimit;      // 極近 → 潮汐撕裂
+    const scorch = env.temperature > T_SCORCH;           // 瞬時高照射壓過緩衝 → 灼燒
+    const doomed = tidal || scorch || T > T_MAX || T < T_MIN;
     if (doomed && !this.wasExtreme) this.#recordToBoard(classifyCatastrophe(env, T, tidal));
     this.wasExtreme = doomed;
 
@@ -153,7 +163,8 @@ export class Civilization {
 // 依行星與三星的幾何/溫度，判定小說式災難名稱
 function classifyCatastrophe(env, T, tidal) {
   if (tidal) return '引力撕裂';
-  if (T > T_MAX) {
+  // 熱死：持續高溫（緩衝後 T_MAX）或瞬時灼燒（T_SCORCH）
+  if (T > T_MAX || env.temperature > T_SCORCH) {
     const d = [...env.dists].sort((a, b) => a - b);
     // 一顆極近、其餘明顯較遠 → 巨日；否則多日逼近 → 三日凌空
     if (d[0] < D_GIANT && d[1] > d[0] * 1.8) return '巨日炙烤';

@@ -1,5 +1,6 @@
 // UI 層：控制面板綁定 + HUD/時鐘/日誌/排行榜 DOM 更新。
 // 不含模擬邏輯，只讀取 sim/civ 狀態並寫入 DOM。
+import { formatYears } from './civilization.js';
 
 const mass7 = v => (v / 1e7).toFixed(1) + 'e7';
 const FMT = {
@@ -105,7 +106,7 @@ export class UI {
       const eraName = civ.era === 'stable' ? '恆紀元' : '亂紀元';
       this.hud.textContent =
         `三體世界 · 第 ${civ.civId} 號文明 · ${eraName} · 溫度 ${civ.temperature.toFixed(2)} · `
-        + `${CIV_LEVELS[civ.civLevel]} · E ${sim.totalEnergy().toExponential(2)}`;
+        + `${CIV_LEVELS[civ.civLevel]}（已歷 ${formatYears(civ.civAge)}） · E ${sim.totalEnergy().toExponential(2)}`;
 
       // 時鐘
       this.clockCiv.textContent = `第 ${civ.civId} 號文明`;
@@ -120,15 +121,16 @@ export class UI {
           `<div class="log-item ${e.kind}">${e.text}</div>`).join('');
       }
 
-      // 排行榜
-      const key = civ.leaderboard.map(r => r.id + ':' + r.level).join(',');
+      // 排行榜（編號 · 等級 · 延續年數）
+      const key = civ.leaderboard.map(r => r.id + ':' + r.level + ':' + Math.round(r.years)).join(',');
       if (key !== this._lastBoardKey) {
         this._lastBoardKey = key;
         this.boardEl.innerHTML = civ.leaderboard.length
           ? civ.leaderboard.map((r, i) =>
             `<div class="board-item"><span class="rank">${i + 1}</span>`
             + `<span class="name">第 ${r.id} 號文明</span>`
-            + `<span class="lvl">${CIV_LEVELS[r.level]}</span></div>`).join('')
+            + `<span class="lvl">${CIV_LEVELS[r.level]}</span>`
+            + `<span class="yrs">${formatYears(r.years)}</span></div>`).join('')
           : '<div class="board-empty">尚無文明記錄</div>';
       }
     } else {
