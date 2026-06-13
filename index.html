@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>三體世界 / Trisolaris</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden;
+    background: #04060a; color: #d6e2e6;
+    font-family: "SF Mono", "Cascadia Code", "JetBrains Mono", ui-monospace, Consolas, monospace; }
+  #app { position: fixed; inset: 0; }
+
+  /* 左側控制面板 — sci-fi HUD 切角發光外框 */
+  #panel {
+    position: fixed; top: 12px; left: 12px; width: 268px; max-height: calc(100% - 24px);
+    padding: 1px; user-select: none; font-size: 13px;
+    background: linear-gradient(150deg, rgba(70,205,224,.75), rgba(70,205,224,.1) 45%, rgba(70,205,224,.55));
+    clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 14px 100%, 0 calc(100% - 14px));
+    filter: drop-shadow(0 0 6px rgba(64,200,224,.35));
+    transition: transform .25s ease, opacity .25s ease;
+  }
+  #panel.collapsed { transform: translateX(-120%); opacity: 0; pointer-events: none; }
+  .panel-body {
+    position: relative; max-height: calc(100vh - 26px); overflow-y: auto;
+    padding: 13px 15px 15px;
+    background: rgba(6, 10, 14, 0.93); backdrop-filter: blur(8px);
+    clip-path: polygon(0 0, calc(100% - 13px) 0, 100% 13px, 100% 100%, 13px 100%, 0 calc(100% - 13px));
+    background-image: repeating-linear-gradient(0deg, rgba(70,205,224,.035) 0 1px, transparent 1px 3px);
+  }
+  /* 動態掃描光條 */
+  #panel::after {
+    content: ''; position: absolute; left: 2px; right: 2px; top: 2px; height: 2px; pointer-events: none;
+    background: linear-gradient(90deg, transparent, rgba(95,225,240,.65), transparent);
+    animation: panel-scan 6s linear infinite;
+  }
+  @keyframes panel-scan { 0%{ top: 2px; opacity: 0 } 10%{ opacity: 1 } 90%{ opacity: 1 } 100%{ top: calc(100% - 4px); opacity: 0 } }
+  #panel-collapse {
+    position: absolute; top: 7px; right: 7px; width: 22px; height: 22px; flex: none;
+    padding: 0; font-size: 14px; line-height: 1; z-index: 3;
+  }
+  #menu-toggle {
+    position: fixed; top: 12px; left: 12px; width: 42px; height: 36px; z-index: 10;
+    display: none; align-items: center; justify-content: center; font-size: 18px;
+    filter: drop-shadow(0 0 5px rgba(64,200,224,.4));
+    clip-path: polygon(0 0, calc(100% - 9px) 0, 100% 100%, 0 100%);
+  }
+  #panel.collapsed ~ #menu-toggle { display: flex; }
+  .hdr { display: flex; align-items: center; gap: 8px; }
+  .hdr .dot { width: 7px; height: 7px; flex: none; background: #4fe6d6; box-shadow: 0 0 8px #4fe6d6; animation: live 2s ease-in-out infinite; }
+  @keyframes live { 0%,100%{ opacity: 1 } 50%{ opacity: .2 } }
+  #panel h1 { margin: 0; font-size: 13px; font-weight: 500; letter-spacing: 3px; color: #d6f2f6; }
+  #panel .sub { margin: 7px 0 12px; font-size: 10px; color: #5f8590; letter-spacing: .3px; }
+  .group { margin: 10px 0; padding-top: 9px; border-top: 1px solid rgba(70,180,205,.14); }
+  .group:first-of-type { border-top: none; padding-top: 2px; }
+  .group-title { display: flex; align-items: center; gap: 7px;
+    font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; color: #5fc2d8; margin-bottom: 7px; }
+  .group-title::before { content: ''; width: 3px; height: 10px; flex: none; background: #2f9db5; box-shadow: 0 0 5px rgba(70,200,224,.6); }
+  .group-title::after { content: ''; flex: 1; height: 1px; background: linear-gradient(90deg, rgba(70,200,224,.4), transparent); }
+  .row.range { display: block; margin: 7px 0; }
+  .row.range .head { display: flex; justify-content: space-between; margin-bottom: 2px; }
+  .row label { color: #9fb0b6; }
+  .row .val { font-variant-numeric: tabular-nums; color: #79d6e6; font-size: 12px; }
+  .row .val::before { content: '['; color: #36707e; margin-right: 3px; }
+  .row .val::after { content: ']'; color: #36707e; margin-left: 3px; }
+  input[type=range] { width: 100%; accent-color: #3fb6cd; }
+  .buttons { display: flex; gap: 8px; margin-top: 12px; }
+  button {
+    flex: 1; padding: 8px; cursor: pointer; font-size: 12px;
+    background: linear-gradient(180deg, #11242c, #0b1820); color: #bfe6ee;
+    border: 1px solid rgba(70,180,205,.4); transition: filter .15s, box-shadow .15s;
+    font-family: inherit; letter-spacing: 2px;
+    clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 100%, 0 100%);
+  }
+  button:hover { filter: brightness(1.35); box-shadow: 0 0 10px rgba(70,200,224,.45); }
+  button.primary { background: linear-gradient(180deg, #1a6072, #103d4a); border-color: #46b6cc; }
+  .check { display: flex; align-items: center; gap: 8px; cursor: pointer; color: #9fb0b6; }
+  .check input { width: 15px; height: 15px; accent-color: #3fb6cd; }
+
+  /* 右側資訊欄：時鐘 + 排行榜 + 日誌 */
+  /* 遊戲讀數風格：等寬字體 */
+  #clock, #hud, #sidebar { font-family: "SF Mono", "Cascadia Code", "JetBrains Mono", ui-monospace, Consolas, monospace; }
+  #clock {
+    position: fixed; top: 14px; right: 16px; text-align: right; cursor: pointer; user-select: none;
+    text-shadow: 0 2px 12px rgba(0,0,0,.7);
+  }
+  #clock-civ { font-size: 12px; letter-spacing: 2px; color: #7fcadb; margin-bottom: 2px; }
+  #clock-time { font-size: 30px; font-weight: 300; letter-spacing: 3px; font-variant-numeric: tabular-nums; color: #e6f1f4; }
+  #clock .era { display: inline-block; margin-top: 2px; font-size: 12px; padding: 2px 10px; border-radius: 2px; letter-spacing: 2px; }
+  #clock .era.stable  { background: rgba(80,200,140,.18); color: #6fe6a8; border: 1px solid rgba(80,200,140,.4); }
+  #clock .era.chaotic { background: rgba(230,90,80,.18); color: #ff8a7a; border: 1px solid rgba(230,90,80,.4); }
+  #clock .toggle-hint { display: block; font-size: 10px; color: #5b647e; margin-top: 4px; }
+
+  #sidebar {
+    position: fixed; top: 92px; right: 16px; width: 246px; max-height: calc(100% - 110px);
+    display: flex; flex-direction: column; gap: 10px; transition: opacity .2s, transform .2s;
+  }
+  #sidebar.hidden { opacity: 0; transform: translateX(20px); pointer-events: none; }
+  .card {
+    padding: 10px 12px;
+    background: rgba(6, 10, 14, 0.82); backdrop-filter: blur(8px);
+    border: 1px solid rgba(70, 180, 205, 0.22);
+    clip-path: polygon(0 0, calc(100% - 11px) 0, 100% 11px, 100% 100%, 11px 100%, 0 calc(100% - 11px));
+    filter: drop-shadow(0 0 5px rgba(64,200,224,.22));
+  }
+  .card-title { display: flex; align-items: center; gap: 7px;
+    font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; color: #5fc2d8; margin-bottom: 8px; }
+  .card-title::before { content: ''; width: 3px; height: 10px; flex: none; background: #2f9db5; box-shadow: 0 0 5px rgba(70,200,224,.6); }
+  .card-title::after { content: ''; flex: 1; height: 1px; background: linear-gradient(90deg, rgba(70,200,224,.4), transparent); }
+  .board-item { display: flex; align-items: center; gap: 8px; font-size: 12px; margin: 4px 0; }
+  .board-item .rank { width: 16px; color: #7fcadb; font-variant-numeric: tabular-nums; }
+  .board-item .name { flex: 1; color: #aebcc2; }
+  .board-item .lvl { color: #e0b86a; font-size: 11px; }
+  .board-empty { font-size: 12px; color: #5f7077; }
+  #log { max-height: 240px; overflow-y: auto; }
+  .log-item { font-size: 11.5px; line-height: 1.5; color: #93a3aa; padding: 1px 0; }
+  .log-item.era   { color: #6fb8cc; }
+  .log-item.level { color: #5fd0a0; }
+  .log-item.doom  { color: #e88a78; }
+
+  #hud {
+    position: fixed; bottom: 12px; left: 12px; font-size: 11px; color: #7c86a3;
+    font-variant-numeric: tabular-nums; pointer-events: none; text-shadow: 0 1px 6px rgba(0,0,0,.7);
+  }
+  #hint { position: fixed; bottom: 12px; right: 16px; font-size: 11px; color: #566079; pointer-events: none; }
+  #quote {
+    position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
+    max-width: 60%; text-align: center; font-size: 12px; letter-spacing: 1px;
+    color: #7a96a0; pointer-events: none; text-shadow: 0 1px 8px rgba(0,0,0,.8);
+    transition: opacity 1.2s ease; opacity: 0;
+  }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<div id="panel">
+  <button id="panel-collapse" title="收合面板">‹</button>
+  <div class="panel-body">
+  <div class="hdr"><span class="dot"></span><h1>三體世界</h1></div>
+  <p class="sub">為使文明長期穩定發展，請尋找太陽運行的規律</p>
+
+  <div class="group">
+    <div class="group-title">天體質量</div>
+    <div class="row range"><div class="head"><label>主星 1 質量</label><span class="val" id="v-mass1">2.0e7</span></div>
+      <input type="range" id="mass1" min="1e6" max="1e8" step="1e6" value="2.0e7"></div>
+    <div class="row range"><div class="head"><label>主星 2 質量</label><span class="val" id="v-mass2">1.3e7</span></div>
+      <input type="range" id="mass2" min="1e6" max="1e8" step="1e6" value="1.3e7"></div>
+    <div class="row range"><div class="head"><label>主星 3 質量</label><span class="val" id="v-mass3">2.9e7</span></div>
+      <input type="range" id="mass3" min="1e6" max="1e8" step="1e6" value="2.9e7"></div>
+    <div class="row range"><div class="head"><label>第四天體質量</label><span class="val" id="v-mass4">10</span></div>
+      <input type="range" id="mass4" min="0" max="1000" step="1" value="10"></div>
+  </div>
+
+  <div class="group">
+    <div class="group-title">動力學</div>
+    <div class="row range"><div class="head"><label>模擬速度</label><span class="val" id="v-speed">1.00×</span></div>
+      <input type="range" id="speed" min="1" max="4" step="0.05" value="1"></div>
+    <div class="row range"><div class="head"><label>初始自轉</label><span class="val" id="v-spin">1.00</span></div>
+      <input type="range" id="spin" min="0" max="2" step="0.01" value="1"></div>
+    <div class="row range"><div class="head"><label>引力軟化距離</label><span class="val" id="v-ras">0.15</span></div>
+      <input type="range" id="ras" min="0.01" max="0.5" step="0.01" value="0.15"></div>
+  </div>
+
+  <div class="group">
+    <div class="group-title">邊界收束</div>
+    <label class="check"><input type="checkbox" id="contain" checked> 飛離恆星減速折返</label>
+    <div class="row range" style="margin-top:8px"><div class="head"><label>收束半徑</label><span class="val" id="v-containR">8.0</span></div>
+      <input type="range" id="containR" min="6" max="15" step="0.1" value="8.0"></div>
+    <div class="row range"><div class="head"><label>收束強度</label><span class="val" id="v-containK">6</span></div>
+      <input type="range" id="containK" min="1" max="20" step="0.5" value="6"></div>
+  </div>
+
+  <div class="group">
+    <div class="group-title">軌跡 / 視覺</div>
+    <label class="check"><input type="checkbox" id="trailen" checked> 顯示軌跡</label>
+    <div class="row range" style="margin-top:8px"><div class="head"><label>軌跡長度</label><span class="val" id="v-trail">240</span></div>
+      <input type="range" id="trail" min="50" max="400" step="10" value="240"></div>
+    <div class="row range"><div class="head"><label>輝光強度</label><span class="val" id="v-bloom">1.20</span></div>
+      <input type="range" id="bloom" min="0" max="2.5" step="0.05" value="1.2"></div>
+  </div>
+
+  <div class="buttons">
+    <button id="randomize" class="primary">隨機擾動</button>
+    <button id="reset">重置</button>
+  </div>
+  </div><!-- /panel-body -->
+</div>
+
+<button id="menu-toggle" title="開啟面板">☰</button>
+
+<div id="clock">
+  <div id="clock-civ">第 1 號文明</div>
+  <div id="clock-time">00:00:00</div>
+  <span id="clock-era" class="era chaotic">亂紀元</span>
+  <span class="toggle-hint">單擊切換側欄</span>
+</div>
+
+<div id="sidebar">
+  <div class="card">
+    <div class="card-title">文明排行榜</div>
+    <div id="leaderboard"><div class="board-empty">尚無文明記錄</div></div>
+  </div>
+  <div class="card">
+    <div class="card-title">文明日誌</div>
+    <div id="log"></div>
+  </div>
+</div>
+
+<div id="hud"></div>
+<div id="quote"></div>
+<div id="hint">滑鼠拖曳旋轉 · 滾輪縮放</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+# 作業系統
+.DS_Store
+Thumbs.db
+
+# Claude Code 本機個人設定
+.claude/settings.local.json
+
+# 測試／除錯產物（瀏覽器測試截圖、playwright 暫存、伺服器日誌）
+.playwright-mcp/
+tb-*.png
+*.log
+
+# 相依（若日後改用打包工具才會出現）
+node_modules/
+dist/
