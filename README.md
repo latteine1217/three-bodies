@@ -119,6 +119,6 @@ js/
 - 主題、術語與名言**致敬**劉慈欣《三体》三部曲（世界觀與名言著作權屬原作者）。
 - 渲染使用 [Three.js](https://threejs.org)（MIT License）。
 
-授權：建議採用 MIT（於 `LICENSE` 填入版權人）。
+授權：本專案程式碼採 [MIT License](LICENSE)。
 
 詳細狀態與後續工作見 [STATUS.md](STATUS.md)。
