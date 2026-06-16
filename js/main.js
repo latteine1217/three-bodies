@@ -4,7 +4,7 @@ import { Renderer } from './renderer.js';
 import { Civilization } from './civilization.js';
 import { UI } from './ui.js';
 
-const BASE_DT = 0.10;   // 基準時間步（每幀總推進 = BASE_DT·speed；此為舊預設的 2 倍，滑桿 1~4×）
+const BASE_DT = 0.05;   // 基準時間步（每幀總推進 = BASE_DT·speed；滑桿 1× 對應此速度，1~4×）
 const SUBSTEPS = 32;    // 每幀內部子步數：細步以解析近距遭遇、抑制數值加熱（計算成本可忽略）
 
 const sim = new Simulation();

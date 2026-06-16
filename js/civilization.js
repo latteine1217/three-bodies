@@ -14,7 +14,7 @@ const RATE = 1;                   // 文明科技基礎成長率
 const GROWTH_ACCEL = 0.05;        // 指數加速係數：越先進成長越快（dP/dt = RATE·(1+ACCEL·P)）
 const LIFE_TAU = 15;              // 生命孵化期：毀滅後需在恆紀元穩定累積此時長，生命才重新演化萌芽
 const DARK_FOREST_RATE = 0.012;   // 抵星際後每單位時間遭黑暗森林打擊的機率（暴露即死）
-const YEARS_PER_SIMTIME = 300;    // 模擬時間 → 文明紀年換算（史詩尺度）
+const YEARS_PER_SIMTIME = 100;   // 1× 速度下約每秒 100 年（原 300，放慢 3 倍）    // 模擬時間 → 文明紀年換算（史詩尺度）
 
 // 文明紀年格式化：年 / 萬年 / 億年
 export function formatYears(y) {
