@@ -21,12 +21,12 @@ function starColor(sim, i) {
   return col;
 }
 
-const MAX_TRAIL = 400;
+const MAX_TRAIL = 4000;   // 軌跡緩衝上限，須 ≥ 滑桿最大值（4000）
 
 export class Renderer {
   constructor(container, simulation) {
     this.trailEnabled = true;
-    this.trailLength = 240;
+    this.trailLength = 1000;
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
