@@ -41,7 +41,7 @@ export class Renderer {
     this.scene = scene;
 
     const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.01, 2000);
-    camera.position.set(0, 5, 24);
+    camera.position.set(0, 6, 34);   // 略拉遠：本體佔比變小、虛空變多，強化渺小感
     this.camera = camera;
 
     const controls = new OrbitControls(camera, renderer.domElement);
@@ -119,7 +119,7 @@ export class Renderer {
   #buildBodies(sim) {
     return sim.bodies.map((b, idx) => {
       const isStar = idx < 3;
-      const radius = isStar ? 0.10 : 0.035;
+      const radius = isStar ? 0.085 : 0.028;   // 偏點狀：更小更渺小，與遠景塵埃拉開尺度對比
       const col = isStar ? starColor(sim, idx) : new THREE.Color(b.color);
       let sphere, light = null, flare = null;
 

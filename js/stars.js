@@ -70,10 +70,19 @@ export function makeStarburstTexture() {
   ctx.fillStyle = corona;
   ctx.fillRect(0, 0, s, s);
 
-  // 緊湊亮核：陡降，像真實點光源的眩光中心
-  const core = ctx.createRadialGradient(C, C, 0, C, C, s * 0.07);
-  core.addColorStop(0, 'rgba(255,255,255,0.95)');
-  core.addColorStop(0.35, 'rgba(255,255,255,0.45)');
+  // 中層輝光：橋接亮核與日冕，讓星芒被一圈柔光包住而非銳利實體
+  const glow = ctx.createRadialGradient(C, C, 0, C, C, s * 0.27);
+  glow.addColorStop(0, 'rgba(255,255,255,0.30)');
+  glow.addColorStop(0.3, 'rgba(255,255,255,0.12)');
+  glow.addColorStop(0.65, 'rgba(255,255,255,0.03)');
+  glow.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, s, s);
+
+  // 緊湊亮核：略柔化（峰值與半徑放寬），中心不再是硬點
+  const core = ctx.createRadialGradient(C, C, 0, C, C, s * 0.09);
+  core.addColorStop(0, 'rgba(255,255,255,0.82)');
+  core.addColorStop(0.4, 'rgba(255,255,255,0.4)');
   core.addColorStop(1, 'rgba(255,255,255,0)');
   ctx.fillStyle = core;
   ctx.fillRect(0, 0, s, s);
@@ -85,7 +94,8 @@ export function makeStarburstTexture() {
     ctx.rotate(angle);
     const g = ctx.createLinearGradient(0, 0, length, 0);
     g.addColorStop(0, `rgba(255,255,255,${alpha})`);
-    g.addColorStop(0.5, `rgba(255,255,255,${alpha * 0.25})`);
+    g.addColorStop(0.3, `rgba(255,255,255,${alpha * 0.4})`);
+    g.addColorStop(0.7, `rgba(255,255,255,${alpha * 0.06})`);
     g.addColorStop(1, 'rgba(255,255,255,0)');
     ctx.fillStyle = g;
     ctx.beginPath();
@@ -94,8 +104,8 @@ export function makeStarburstTexture() {
     ctx.restore();
   }
   const L = s * 0.5;
-  for (const a of [0, Math.PI / 2, Math.PI, -Math.PI / 2]) spike(a, L, s * 0.006, 0.45);             // 主十字
-  for (const a of [Math.PI / 4, 3 * Math.PI / 4, -Math.PI / 4, -3 * Math.PI / 4]) spike(a, L * 0.5, s * 0.004, 0.18); // 斜軸
+  for (const a of [0, Math.PI / 2, Math.PI, -Math.PI / 2]) spike(a, L, s * 0.006, 0.28);             // 主十字（降 alpha、融入輝光）
+  for (const a of [Math.PI / 4, 3 * Math.PI / 4, -Math.PI / 4, -3 * Math.PI / 4]) spike(a, L * 0.5, s * 0.004, 0.10); // 斜軸
 
   const tex = new THREE.CanvasTexture(cv);
   tex.colorSpace = THREE.SRGBColorSpace;
