@@ -84,7 +84,41 @@ export class UI {
     this._lastLogVer = -1;
     this._lastBoardKey = '';
 
+    // era-reactive 狀態追蹤（純驅動樣式，不觸碰模擬數值）
+    this.eraVeil = document.getElementById('era-veil');
+    this._lastEra = null;       // 偵測紀元切換 → 掃描轉場
+    this._starRGB = [120, 220, 230];   // 平滑後的三日色（寫入 CSS 變數）
+
+    document.body.classList.add('era-chaotic');   // 初始與時鐘預設一致
+
     this.#startQuotes();
+  }
+
+  // 把三日當下的黑體平均色平滑後寫入 CSS 變數，讓 UI 強調色與天上的三日連動。
+  // 平滑避免質量滑桿拖動時顏色跳動。
+  #syncStarColor() {
+    const rgb = this.renderer.eraStarRGB?.();
+    if (!rgb) return;
+    const s = this._starRGB;
+    for (let i = 0; i < 3; i++) s[i] += (rgb[i] - s[i]) * 0.08;
+    const st = document.body.style;
+    st.setProperty('--star-r', s[0].toFixed(0));
+    st.setProperty('--star-g', s[1].toFixed(0));
+    st.setProperty('--star-b', s[2].toFixed(0));
+  }
+
+  // 切換 body 紀元 class；紀元真正翻轉時放一道全螢幕色彩掃描（恆⇄亂的張力）
+  #applyEra(civ) {
+    if (civ.era === this._lastEra) return;
+    const wasInit = this._lastEra === null;
+    this._lastEra = civ.era;
+    document.body.classList.toggle('era-stable', civ.era === 'stable');
+    document.body.classList.toggle('era-chaotic', civ.era !== 'stable');
+    if (wasInit) return;   // 初次套用不放轉場
+    // 重觸發掃描動畫（移除→強制重排→加回）
+    this.eraVeil.classList.remove('sweep');
+    void this.eraVeil.offsetWidth;
+    this.eraVeil.classList.add('sweep');
   }
 
   // 《三体》名言輪播（緩慢淡入淡出）
@@ -113,6 +147,11 @@ export class UI {
       this.clockTime.textContent = formatSimTime(civ.simTime);
       this.clockEra.textContent = eraName;
       this.clockEra.className = 'era ' + (civ.era === 'stable' ? 'stable' : 'chaotic');
+
+      // === era-reactive 主題：整個介面與 3D 場景隨紀元呼吸／變色 ===
+      this.#applyEra(civ);
+      this.#syncStarColor();
+      this.renderer.setEra?.(civ.era);
 
       // 日誌（僅在變動時重繪；log.length 會在上限飽和，故用 logVersion）
       if (civ.logVersion !== this._lastLogVer) {

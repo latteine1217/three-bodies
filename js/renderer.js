@@ -67,6 +67,9 @@ export class Renderer {
         grainAmount: { value: 0.045 },
         vignetteAmount: { value: 0.45 },
         aberration: { value: 0.0026 },
+        // era-reactive 色調分級：恆紀元偏冷青、亂紀元偏暖赤（由 setEra 平滑驅動）
+        gradeTint: { value: new THREE.Color(0.5, 0.5, 0.5) },
+        gradeAmount: { value: 0.0 },
       },
       vertexShader: /* glsl */`
         varying vec2 vUv;
@@ -74,7 +77,8 @@ export class Renderer {
       `,
       fragmentShader: /* glsl */`
         uniform sampler2D tDiffuse;
-        uniform float time, grainAmount, vignetteAmount, aberration;
+        uniform float time, grainAmount, vignetteAmount, aberration, gradeAmount;
+        uniform vec3 gradeTint;
         uniform vec2 resolution;
         varying vec2 vUv;
         float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -88,6 +92,11 @@ export class Renderer {
             texture2D(tDiffuse, vUv).g,
             texture2D(tDiffuse, vUv + off).b
           );
+          // era 色調分級：朝紀元色相輕推（soft-light 風格），邊緣加倍，營造冷／熱氛圍
+          vec3 tint = gradeTint * 2.0;   // 0.5 中性 → 1.0 倍率
+          vec3 graded = col * tint;
+          float edge = gradeAmount * (0.55 + 0.9 * d);
+          col = mix(col, graded, clamp(edge, 0.0, 1.0));
           // 暗角
           float vig = smoothstep(0.9, 0.35, d);
           col *= mix(1.0, vig, vignetteAmount);
@@ -113,6 +122,13 @@ export class Renderer {
     this.starburstTex = makeStarburstTexture();   // 共用星芒貼圖
     this.flareTime = 0;                            // 星芒閃爍相位
     this.meshGroups = this.#buildBodies(simulation);
+
+    // era-reactive 後製狀態：以 mood 在 0（恆紀元冷靜）↔1（亂紀元灼熱）間平滑過渡，
+    // 牽動 bloom / 暗角 / grain / 色調分級，使 3D 場景與 2D HUD 同步呼吸。
+    this.sim = simulation;
+    this.eraMood = 0;          // 平滑後的紀元情緒
+    this.eraTarget = 0;        // 目標（setEra 設定）
+    this.bloomBase = bloomPass.strength;   // UI 滑桿設定的基準輝光（era 在其上加成）
   }
 
   // 為每個天體建立 mesh + 軌跡；恆星用電漿材質 + 點光源，行星用受光標準材質
@@ -213,10 +229,28 @@ export class Renderer {
       m.flare.scale.setScalar(1.8 * (0.9 + 0.12 * Math.sin(t * 0.7 + p)));
     }
 
+    // era 情緒平滑過渡（指數趨近，約 2.5s 完成），驅動後製氛圍
+    this.eraMood += (this.eraTarget - this.eraMood) * (1 - Math.exp(-dt / 2.5));
+    this.#applyMood();
+
     this.grainPass.uniforms.time.value += dt * 55;   // film grain 逐幀變動
     this.background.update(dt);
     this.controls.update();
     this.composer.render();
+  }
+
+  // 依 eraMood（0 冷靜 → 1 灼熱）調校後製：亂紀元 bloom 更強、暗角更壓、grain 更躁、色偏赤。
+  #applyMood() {
+    const m = this.eraMood;
+    this.bloomPass.strength = this.bloomBase * (1 + 0.55 * m);   // 亂紀元輝光增強，三日更刺目
+    const g = this.grainPass.uniforms;
+    g.vignetteAmount.value = 0.45 + 0.22 * m;                    // 亂紀元邊緣更暗，壓迫感
+    g.grainAmount.value = 0.045 + 0.03 * m;                      // 亂紀元顆粒更躁動
+    g.gradeAmount.value = 0.16 + 0.30 * m;                       // 色調分級強度（隨情緒上升）
+    // 色相：恆紀元偏冷青、亂紀元偏暖赤；以中性 0.5 為基準推移
+    const tint = g.gradeTint.value;
+    tint.setRGB(0.5 + 0.10 * m, 0.5 - 0.02 * m, 0.5 - 0.13 * m);
+    this.renderer.toneMappingExposure = 1.0 + 0.10 * m;          // 亂紀元整體更亮、更曝
   }
 
   // 質量改變時，依新表面色溫更新恆星黑體色（材質 / 點光源 / 軌跡）
@@ -232,7 +266,23 @@ export class Renderer {
     }
   }
 
-  setBloomStrength(v) { this.bloomPass.strength = v; }
+  // 紀元設定（由 ui.js 每幀傳入）：恆紀元→0、亂紀元→1，#applyMood 平滑趨近
+  setEra(era) { this.eraTarget = era === 'stable' ? 0 : 1; }
+
+  // 三日當下黑體平均色（0-255），供 2D HUD 連動強調色。亮度正規化避免暗星把 UI 拖灰。
+  eraStarRGB() {
+    let r = 0, g = 0, b = 0;
+    for (let i = 0; i < 3; i++) {
+      const c = this.meshGroups[i].baseColor;
+      r += c.r; g += c.g; b += c.b;
+    }
+    r /= 3; g /= 3; b /= 3;
+    const peak = Math.max(r, g, b, 0.0001);   // 提亮到峰值=1，取色相而非亮度
+    return [255 * r / peak, 255 * g / peak, 255 * b / peak];
+  }
+
+  // UI 輝光滑桿：設定基準值；實際 strength = base·(1 + era 加成)，每幀於 #applyMood 套用
+  setBloomStrength(v) { this.bloomBase = v; }
   setTrailLength(n) { this.trailLength = n; }
   setTrailEnabled(on) {
     this.trailEnabled = on;
