@@ -23,10 +23,10 @@ export class Simulation {
       DD: 20,                // 天體距質心超出此值視為系統解體（數值安全網）
       tempRef: 4,            // 溫度正規化參考距離（reset 時設為平均星半徑 R0）
       planetDensity: 2.0e10, // 行星密度，決定洛希（引力撕裂）半徑
-      contain: true,         // 邊界收束：飛離的恆星減速折返而非逃逸
+      contain: true,         // 邊界收束：飛離的恆星減速折返而非逃逸（僅作用於 3 恆星，行星自由）
       containR: 8.0,         // 收束半徑（質心相對）
-      containK: 6,           // 彈簧回復強度
-      containDamp: 0.5,      // 向外徑向阻尼率
+      containK: 6,           // 彈簧回復強度（保守力，計入 totalEnergy）
+      containDamp: 0.1,      // 向外徑向阻尼率（P1：由 0.5 調小，保留少量收斂但不過度壓抑三體混沌）
     };
     this.bodies = BODY_COLORS.map((color, i) => ({
       x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0,
@@ -109,13 +109,14 @@ export class Simulation {
       }
     }
 
-    // 邊界收束（所有天體共用同一標準）：任一天體飛離質心超過 containR 時，
-    // 施加彈簧回復力 + 向外徑向阻尼，使其減速折返而非逃逸。星體與行星一視同仁。
+    // 邊界收束（P2：僅作用於 3 顆恆星）：恆星飛離質心超過 containR 時，施加彈簧回復力
+    // + 向外徑向阻尼，使其減速折返而非逃逸。行星不受邊界約束，純由恆星引力束縛——
+    // 物理上行星本應被恆星俘獲/彈出，戲劇性事件由 DD 安全網（main.js 自動重置）兜底。
     if (this.params.contain) {
       const cR = this.params.containR, cK = this.params.containK, cD = this.params.containDamp;
       let mSys = 0; for (let i = 0; i < n; i++) mSys += b[i].mass;
       const gM = G * mSys;
-      for (let i = 0; i < n; i++) {
+      for (let i = 0; i < 3; i++) {
         const s = b[i];
         const rx = s.x - com.x, ry = s.y - com.y, rz = s.z - com.z;
         const rdist = Math.max(len(rx, ry, rz), 1e-5);
@@ -174,12 +175,14 @@ export class Simulation {
         pe += G * b[i].mass * b[j].mass * this.#softPotential(d);   // Plummer 一致位能
       }
 
-    // 邊界收束彈簧位能（所有天體 dist>containR）：½·m·cK·G·M_sys·(d−cR)²
+    // 邊界收束彈簧位能（P2：僅 3 恆星 dist>containR）：½·m·cK·G·M_sys·(d−cR)²。
+    // 註：開啟 contain 且有恆星外向越界時，向外徑向阻尼為耗散項、無對應位能，
+    // 故此時 totalEnergy() 不嚴格守恆——勿單獨用作積分器守恆檢查（請以 contain=false 驗證）。
     if (P.contain) {
       const com = this.centerOfMass();
       let mSys = 0; for (const bb of b) mSys += bb.mass;
       const gM = G * mSys;
-      for (let i = 0; i < b.length; i++) {
+      for (let i = 0; i < 3; i++) {
         const d = Math.max(len(b[i].x - com.x, b[i].y - com.y, b[i].z - com.z), 1e-5);
         if (d > P.containR) pe += 0.5 * b[i].mass * P.containK * gM * (d - P.containR) * (d - P.containR);
       }
